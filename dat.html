@@ -77,6 +77,7 @@ var PathVertices = [
 ];
 
 var DraggingPathNode = null;
+var showValues = true;
 
 var MouseDown = function(e) {
 	var x = e.pageX;
@@ -238,8 +239,20 @@ var DrawPath = function(path) {
 		for(var i = 0; i < triangles.length; i++) {
 			DrawTriangle(triangles[i], false, true);
 		}
+		if(showValues) {
+			for(var i = 0; i < Triangles.length; i++) {
+			if(Triangles[i].pathNode.value != 0) {
+				var mid = Triangles[i].GetMiddle();
+				var text1 =	'g:' + Triangles[i].pathNode.pathlength.toFixed(0);
+				var text2 =	'h:' + Triangles[i].pathNode.heuristic.toFixed(0);
+				var text3 =	'f:' + Triangles[i].pathNode.value.toFixed(0);
+				DrawText(text1, mid.y, mid.x);
+				DrawText(text2, mid.y + 20, mid.x);
+				DrawText(text3, mid.y + 40, mid.x);
+				}
+			}
+		}
 	}
-	DrawLines(triangles.map(function(t) { return t.GetMiddle(); }));
 	DrawPathNodes();
 }
 
@@ -278,9 +291,8 @@ var DrawGatedPath = function(path) {
 	}
 }
 
-var DrawText = function(text, y) {
-	var x = 30;
-	Ctx.font = "bold 20px Arial";
+var DrawText = function(text, y, x) {
+	Ctx.font = "bold 15px Arial";
 	Ctx.strokeStyle = 'black';
 	Ctx.lineWidth = 3;
 	Ctx.strokeText(text, x, y);
@@ -498,7 +510,6 @@ var PathNode = function(tri) {
 	this.heuristic = 0;
 	this.pathlength = 0;
 	this.value = 0;
-	this.entryPoint = null;
 }
 PathNode.prototype.TogglePathable = function() {
 	this.pathable = !this.pathable;
@@ -508,34 +519,38 @@ PathNode.prototype.GetAdjacent = function() {
 		return tri.pathNode;
 	});
 }
-PathNode.prototype.GetDistance = function(other) {
-	var center = this.triangle.GetMiddle();
-	var targetcenter = other.triangle.GetMiddle();
-	return Math.hypot(center.x - targetcenter.x, center.y - targetcenter.y);
+PathNode.prototype.GetHeuristic = function(parent, endVertex) {
+	//first calculate shared edge between the parent node and the current node
+	var sharedEdge = this.triangle.SharedVertices(parent.triangle);
+
+	//then find the distance between this edge and the endVertex
+	var closestPoint = closestPointToLineSegment(endVertex, sharedEdge);
+
+	var dist = Math.hypot(closestPoint.x - endVertex.x,closestPoint.y - endVertex.y);
+
+	return dist;
 }
-PathNode.prototype.Visit = function(parent, target) {
+PathNode.prototype.Visit = function(parent, endVertex) {
 	this.parent = parent;
 	this.visited = true;
-	var oldPathlength = this.GetDistance(parent) + parent.pathlength;
+	this.heuristic = this.GetHeuristic(parent, endVertex);
 	this.pathlength = parent.pathlength + GetPathValue(parent, this);
-	console.log('-----------');
-	console.log('old: ' + oldPathlength);
-	console.log('new: ' + this.pathlength);
-	this.heuristic = this.GetDistance(target);
 	this.value = this.pathlength + this.heuristic;
 }
 
 var GetPathValue = function(firstNode, secondNode) {
 	//three methods
-	//first, distance between firstNode.entryPoint and the closest point on the triangle of secondNode - this requires calculation of the entry point for secondNode, after calculating that we simply assign that to entryPoint.
+	//first, distance between the startVertex and the closest point on the triangle of secondNode - this requires calculation of the entry point for secondNode, after calculating that we simply assign that to entryPoint.
+
+	var firstG = 0;
 
 	var sharedEdge = firstNode.triangle.SharedVertices(secondNode.triangle);
 
-	var closestPoint = closestPointToLineSegment(firstNode.entryPoint, sharedEdge);
-
-	secondNode.entryPoint = closestPoint;
-	
-	var firstG = Math.hypot(firstNode.entryPoint.x - closestPoint.x, firstNode.entryPoint.y - closestPoint.y);
+	if(firstNode.entryPoint) {
+		var closestPoint = closestPointToLineSegment(firstNode.entryPoint, sharedEdge);
+		
+		firstG = Math.hypot(firstNode.entryPoint.x - closestPoint.x, firstNode.entryPoint.y - closestPoint.y);
+	}
 
 	//can only use this if there is an entry edge for the first node
 	var secondG = 0;
@@ -569,10 +584,6 @@ var GetPathValue = function(firstNode, secondNode) {
 	//third, difference between secondNode.heuristic and firstNode.heuristic
 	var thirdG = Math.abs(secondNode.heuristic - firstNode.heuristic);
 
-	console.log('g1:     ' + firstG);
-	console.log('g2:     ' + secondG);
-	console.log('g3:     ' + thirdG);
-	console.log('chosen: ' + Math.max(firstG, secondG, thirdG));
 	return Math.max(firstG, secondG, thirdG);
 
 }
@@ -605,7 +616,6 @@ var FindPath = function(startVertex, endVertex) {
 		Triangles[i].pathNode.heuristic = 0;
 		Triangles[i].pathNode.pathlength = 0;
 		Triangles[i].pathNode.value = 0;
-		Triangles[i].pathNode.entryPoint = null;
 	}
 	
 	var startNode = GetTriangle(startVertex).pathNode;
@@ -622,7 +632,7 @@ var FindPath = function(startVertex, endVertex) {
 	var polled = 0;
 	
 	startNode.pathlength = 0;
-	startNode.heuristic = startNode.GetDistance(endNode);
+	startNode.heuristic = Math.hypot(startVertex.x - endVertex.x, startVertex.y - endVertex.y);
 	startNode.value = startNode.heuristic;
 	startNode.visited = true;
 	startNode.entryPoint = startVertex;
@@ -649,14 +659,13 @@ var FindPath = function(startVertex, endVertex) {
 			if(current.pathable) {
 				if(!current.visited) {
 					visited++;
-					current.Visit(nominated, endNode);
+					current.Visit(nominated, endVertex);
 					openSet.push(current);
 				} else {
 					var newPathLength = nominated.pathlength + GetPathValue(nominated, current);
-					// var newPathLength = nominated.pathlength + current.GetDistance(nominated);
 					
 					if(newPathLength < current.pathlength) {
-						current.Visit(nominated, endNode);
+						current.Visit(nominated, endVertex);
 					}
 				}
 			}
@@ -671,7 +680,6 @@ var FindPath = function(startVertex, endVertex) {
 	}
 		
 	DrawPath(Path);
-	DrawText("Triangle - discovered: " + visited + ", polled: " + polled, 50);
 	
 	SimplifyPath(Path);
 }
