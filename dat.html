@@ -239,56 +239,36 @@ var DrawPath = function(path) {
 		for(var i = 0; i < triangles.length; i++) {
 			DrawTriangle(triangles[i], false, true);
 		}
-		if(showValues) {
+	}
+	DrawPathNodes();
+}
+
+var DrawGatedPath = function(rawgateways, gateways) {
+	for(var i = 0; i < rawgateways.length; i++) {
+		DrawLines(rawgateways[i].vertices, '#006600');
+	}
+	
+	for(var i = 0; i < gateways.length; i++) {
+		DrawLines(gateways[i].vertices, '#00DD00');
+	}
+}
+
+var DrawPathValues = function() {
+	if(showValues) {
 			for(var i = 0; i < Triangles.length; i++) {
 			if(Triangles[i].pathNode.value != 0) {
 				var mid = Triangles[i].GetMiddle();
 				var text1 =	'g:' + Triangles[i].pathNode.pathlength.toFixed(0);
 				var text2 =	'h:' + Triangles[i].pathNode.heuristic.toFixed(0);
 				var text3 =	'f:' + Triangles[i].pathNode.value.toFixed(0);
+				var text4 = 'gchoices ' + Triangles[i].pathNode.choice1 + ', ' + Triangles[i].pathNode.choice2 + ', ' + Triangles[i].pathNode.choice3;
 				DrawText(text1, mid.y, mid.x);
 				DrawText(text2, mid.y + 20, mid.x);
 				DrawText(text3, mid.y + 40, mid.x);
+				DrawText(text4, mid.y + 60, mid.x);
 				}
 			}
 		}
-	}
-	DrawPathNodes();
-}
-
-var DrawGatedPath = function(path) {
-	return;
-	for(var ww = 0; ww + 1 < path.length; ww++) {
-		var v1 = path[ww].vertices[0];
-		var v2 = path[ww].vertices[1];
-		var v3 = path[ww+1].vertices[0];
-		var v4 = path[ww+1].vertices[1];
-		var vs1 = [v1, v2, v3];
-		var vs2 = [v3, v4, v1];
-		var vs3 = [v3, v4, v2];
-		var vs4 = [v1, v2, v4];
-		var tris = [vs1, vs2, vs3, vs4];
-		
-		for(var qq = 0; qq < 4; qq++) {
-			Ctx.beginPath();
-			for (var i = 0; i < 3; i++) {
-				var j = (i + 1) % 3;
-				var x1 = tris[qq][i].x;
-				var y1 = tris[qq][i].y;
-				var x2 = tris[qq][j].x;
-				var y2 = tris[qq][j].y;
-				if(i === 0) {
-					Ctx.moveTo(x1, y1);
-				}
-				Ctx.lineTo(x2, y2);
-			}
-			Ctx.closePath();
-			Ctx.fillStyle = '#000077';
-			Ctx.strokeStyle = '#000077';
-			Ctx.fill();
-			Ctx.stroke();
-		}
-	}
 }
 
 var DrawText = function(text, y, x) {
@@ -323,9 +303,6 @@ function closestPointToLineSegment(p, l) {
 	return { x: v.x + t * (w.x - v.x), y: v.y + t * (w.y - v.y) };
 }
 
-</script>
-
-<script type="text/javascript">
 
 //triangle array
 var Triangles = [];
@@ -510,6 +487,7 @@ var PathNode = function(tri) {
 	this.heuristic = 0;
 	this.pathlength = 0;
 	this.value = 0;
+	this.entryPoint = undefined;
 }
 PathNode.prototype.TogglePathable = function() {
 	this.pathable = !this.pathable;
@@ -526,7 +504,7 @@ PathNode.prototype.GetHeuristic = function(parent, endVertex) {
 	//then find the distance between this edge and the endVertex
 	var closestPoint = closestPointToLineSegment(endVertex, sharedEdge);
 
-	var dist = Math.hypot(closestPoint.x - endVertex.x,closestPoint.y - endVertex.y);
+	var dist = Math.hypot(closestPoint.x - endVertex.x, closestPoint.y - endVertex.y);
 
 	return dist;
 }
@@ -541,9 +519,7 @@ PathNode.prototype.Visit = function(parent, endVertex) {
 var GetPathValue = function(firstNode, secondNode) {
 	//three methods
 	//first, distance between the startVertex and the closest point on the triangle of secondNode - this requires calculation of the entry point for secondNode, after calculating that we simply assign that to entryPoint.
-
 	var firstG = 0;
-
 	var sharedEdge = firstNode.triangle.SharedVertices(secondNode.triangle);
 
 	if(firstNode.entryPoint) {
@@ -576,7 +552,7 @@ var GetPathValue = function(firstNode, secondNode) {
 		var denominator = 2 * p12 * p13;
 		var angle = Math.acos(numerator/denominator);
 
-		var arclength = angle * 15;
+		var arclength = angle * 20;
 		secondG = arclength;
 	}
 	
@@ -584,8 +560,15 @@ var GetPathValue = function(firstNode, secondNode) {
 	//third, difference between secondNode.heuristic and firstNode.heuristic
 	var thirdG = Math.abs(secondNode.heuristic - firstNode.heuristic);
 
-	return Math.max(firstG, secondG, thirdG);
+	var maxG = Math.max(firstG, secondG, thirdG);
 
+	if(maxG != 0) {
+		secondNode.choice1 = firstG;
+		secondNode.choice2 = secondG;
+		secondNode.choice3 = thirdG;
+	}
+
+	return maxG;
 }
 
 //first angle is the pivot
@@ -616,6 +599,7 @@ var FindPath = function(startVertex, endVertex) {
 		Triangles[i].pathNode.heuristic = 0;
 		Triangles[i].pathNode.pathlength = 0;
 		Triangles[i].pathNode.value = 0;
+		Triangles[i].pathNode.entryPoint = undefined;
 	}
 	
 	var startNode = GetTriangle(startVertex).pathNode;
@@ -682,6 +666,8 @@ var FindPath = function(startVertex, endVertex) {
 	DrawPath(Path);
 	
 	SimplifyPath(Path);
+
+	DrawPathValues();
 }
 
 var Gateway = function(vertices) {
@@ -774,19 +760,8 @@ var SimplifyPath = function(path) {
 	}
 	
 	gateways.push(rawgateways[rawgateways.length - 1]);
-		
-	//draw stuff
-	DrawGatedPath(gateways);
 	
-	for(var i = 0; i < rawgateways.length; i++) {
-		DrawLines(rawgateways[i].vertices, '#00DD00');
-		//Drawcircle(vertex, radius, color)
-	}
-	
-	for(var i = 0; i < gateways.length; i++) {
-		DrawLines(gateways[i].vertices, '#006600');
-		//Drawcircle(vertex, radius, color)
-	}
+	DrawGatedPath(rawgateways, gateways);
 }
 
 //fun static methods because organisation is for scrubs
