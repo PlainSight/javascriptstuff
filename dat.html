@@ -217,6 +217,15 @@ var DrawLines = function(path, color) {
 	Ctx.closePath();
 }
 
+var DrawLine = function(vertex1, vertex2) {
+	Ctx.strokeStyle = LIGHTORANGE;
+	Ctx.beginPath();
+	Ctx.moveTo(vertex1.x, vertex1.y);
+	Ctx.lineTo(vertex2.x, vertex2.y);
+	Ctx.stroke();
+	Ctx.closePath();
+}
+
 var DrawCircle = function(vertex, radius, color) {
 	Ctx.beginPath();
 	Ctx.strokeStyle = BLACK;
@@ -258,6 +267,13 @@ var DrawPathValues = function() {
 			for(var i = 0; i < Triangles.length; i++) {
 			if(Triangles[i].pathNode.value != 0) {
 				var mid = Triangles[i].GetMiddle();
+
+				if(Triangles[i].pathNode.parent) {
+					var parentmid = Triangles[i].pathNode.parent.triangle.GetMiddle();
+					DrawCircle(parentmid, 5, LIGHTORANGE);
+					DrawLine(parentmid, mid);
+				}
+
 				var text1 =	'g:' + Triangles[i].pathNode.pathlength.toFixed(0);
 				var text2 =	'h:' + Triangles[i].pathNode.heuristic.toFixed(0);
 				var text3 =	'f:' + Triangles[i].pathNode.value.toFixed(0);
@@ -265,7 +281,7 @@ var DrawPathValues = function() {
 				DrawText(text1, mid.y, mid.x);
 				DrawText(text2, mid.y + 20, mid.x);
 				DrawText(text3, mid.y + 40, mid.x);
-				DrawText(text4, mid.y + 60, mid.x);
+				//DrawText(text4, mid.y + 60, mid.x);
 				}
 			}
 		}
@@ -516,6 +532,7 @@ PathNode.prototype.Visit = function(parent, endVertex) {
 	this.value = this.pathlength + this.heuristic;
 }
 
+//second node is the first node's parent
 var GetPathValue = function(firstNode, secondNode) {
 	//three methods
 	//first, distance between the startVertex and the closest point on the triangle of secondNode - this requires calculation of the entry point for secondNode, after calculating that we simply assign that to entryPoint.
@@ -625,7 +642,8 @@ var FindPath = function(startVertex, endVertex) {
 	
 	while(openSet.length != 0) {
 		
-		openSet.sort(function(a, b) { return b.value - a.value; });
+		openSet.sort(function(a, b) { return (b.pathNode == endNode ? 1 : 0) - (a.pathNode == endNode ? 1 : 0) });
+		openSet.sort(function(a, b) { return b.value - a.value });
 		
 		var nominated = openSet.pop();
 		
@@ -649,7 +667,12 @@ var FindPath = function(startVertex, endVertex) {
 					var newPathLength = nominated.pathlength + GetPathValue(nominated, current);
 					
 					if(newPathLength < current.pathlength) {
+						DrawTriangles();
+						DrawPathValues();
 						current.Visit(nominated, endVertex);
+						DrawTriangles();
+						DrawPathValues();
+						console.log('changed');
 					}
 				}
 			}
