@@ -629,9 +629,6 @@ var FindPath = function(startVertex, endVertex) {
 
 	var openSet = [];
 	
-	var visited = 0;
-	var polled = 0;
-	
 	startNode.pathlength = 0;
 	startNode.heuristic = Math.hypot(startVertex.x - endVertex.x, startVertex.y - endVertex.y);
 	startNode.value = startNode.heuristic;
@@ -646,9 +643,7 @@ var FindPath = function(startVertex, endVertex) {
 		openSet.sort(function(a, b) { return b.value - a.value });
 		
 		var nominated = openSet.pop();
-		
-		polled++;
-		
+				
 		if(nominated === endNode) {
 			break;
 		}
@@ -660,7 +655,6 @@ var FindPath = function(startVertex, endVertex) {
 			
 			if(current.pathable) {
 				if(!current.visited) {
-					visited++;
 					current.Visit(nominated, endVertex);
 					openSet.push(current);
 				} else {
